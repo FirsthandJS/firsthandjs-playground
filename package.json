@@ -1,0 +1,41 @@
+{
+  "name": "firsthandjs-playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Write Firsthand in the browser: a file, an editor, and the page it makes, side by side.",
+  "license": "MIT",
+  "scripts": {
+    "predev": "npm run generate",
+    "dev": "vite",
+    "prebuild": "npm run generate",
+    "build": "vite build",
+    "generate": "node scripts/build-runtime.mjs && node scripts/collect-types.mjs",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "pretest": "npm run generate",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@babel/standalone": "^8.0.6",
+    "@firsthandjs/data": "^0.10.1",
+    "@firsthandjs/deep": "^0.10.1",
+    "@firsthandjs/dom": "^0.10.1",
+    "@firsthandjs/i18n": "^0.10.1",
+    "@firsthandjs/router": "^0.10.1",
+    "@firsthandjs/styled": "^0.10.1",
+    "esbuild": "^0.28.2",
+    "monaco-editor": "^0.55.0"
+  },
+  "devDependencies": {
+    "@firsthandjs/compiler": "^0.10.1",
+    "@firsthandjs/jsx-runtime": "^0.10.1",
+    "@firsthandjs/testing": "^0.10.1",
+    "@types/babel__standalone": "^7.1.9",
+    "happy-dom": "^20.14.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11",
+    "esbuild": "^0.28.2"
+  }
+}
