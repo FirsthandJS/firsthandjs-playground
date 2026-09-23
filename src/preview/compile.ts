@@ -26,7 +26,10 @@ let babel: Promise<typeof import('@babel/standalone')> | null = null;
 
 function load(): Promise<typeof import('@babel/standalone')> {
   babel ??= import('@babel/standalone').then((module) => {
-    module.registerPlugin('firsthand', firsthand);
+    // The cast is a types-only gap. Babel hands a plugin its API and its
+    // options; `@babel/standalone` types `registerPlugin` as taking a plugin
+    // that accepts neither, which every real plugin does.
+    module.registerPlugin('firsthand', firsthand as unknown as () => object);
     return module;
   });
   return babel;
