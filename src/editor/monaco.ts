@@ -58,19 +58,20 @@ export function setupMonaco(): typeof monaco {
     noEmit: true,
     lib: ['es2022', 'dom'],
   });
-  ts.setDiagnosticsOptions({
-    noSemanticValidation: false,
-    noSyntaxValidation: false,
-    // 2307: "cannot find module". The preview resolves `@firsthandjs/…`
-    // through an import map, which TypeScript here knows nothing about, and a
-    // red line under a working import teaches the wrong thing.
-    diagnosticCodesToIgnore: [2307],
-  });
+  // Nothing suppressed. The declarations below are the real ones, under the
+  // paths they have in `node_modules`, so `@firsthandjs/…` resolves here the
+  // way it does in a project — and an import that cannot be resolved is worth
+  // a red line, because the preview will not resolve it either.
+  ts.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
 
   for (const [path, contents] of Object.entries(declarations as Record<string, string>)) {
     ts.addExtraLib(contents, path);
   }
-  ts.addExtraLib(JSX_TYPES, 'file:///playground-jsx.d.ts');
+
+  // Handles for the end-to-end tests, which ask the language service for
+  // completions the way a keystroke does. `monaco.languages.typescript` is
+  // not one of them: the trimmed entry does not attach it.
+  Object.assign(globalThis, { __monaco: monaco, __ts: api });
 
   defineThemes();
   return monaco;
@@ -102,19 +103,3 @@ function defineThemes(): void {
   build('dark');
   build('light');
 }
-
-/**
- * What JSX means here.
- *
- * Firsthand's own JSX types come from `@firsthandjs/jsx-runtime`, which the
- * editor cannot resolve without a `tsconfig` — so the namespace is declared
- * loosely instead. It keeps the intrinsic elements from turning red without
- * pretending to type them, which would be worse than not typing them.
- */
-const JSX_TYPES = `
-declare namespace JSX {
-  interface IntrinsicElements { [name: string]: any }
-  interface ElementChildrenAttribute { children: object }
-  type Element = any;
-}
-`;

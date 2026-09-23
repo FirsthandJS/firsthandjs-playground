@@ -40,6 +40,9 @@ export const Editor = component<EditorProps>((props) => {
   };
 
   const mount = (element: HTMLDivElement): void => {
+    // A handle for the end-to-end tests, which ask the language service for
+    // completions the way a keystroke does.
+    (globalThis as unknown as { __monaco?: unknown }).__monaco = monaco;
     editor = monaco.editor.create(element, {
       model: modelFor(props.file),
       theme: `firsthand-${mode.value}`,

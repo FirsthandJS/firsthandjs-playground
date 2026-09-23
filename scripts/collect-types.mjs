@@ -17,7 +17,10 @@ const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const modules = resolve(root, 'node_modules');
 
-const PACKAGES = ['core', 'dom', 'data', 'styled', 'router', 'i18n', 'deep'];
+// `jsx-runtime` is the one that matters most and is the easiest to forget:
+// it declares the global `JSX` namespace, which is where `<div class=…>` gets
+// its completions and its types from. Without it every tag is `any`.
+const PACKAGES = ['core', 'dom', 'jsx-runtime', 'data', 'styled', 'router', 'i18n', 'deep'];
 
 /** Every `.d.ts` under a directory, with the path it is served at. */
 function declarations(directory, into, base) {
