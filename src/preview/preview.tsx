@@ -148,14 +148,20 @@ export const Preview = component<PreviewProps>((props) => {
   );
 });
 
-/** What the strip along the bottom says: running, starting, or what broke. */
+/**
+ * What the strip along the bottom says: running, starting, or what broke.
+ *
+ * All three are always here and each says whether it is shown, rather than a
+ * branch choosing between them — see `Shown` in `preview.styled`. `role=alert`
+ * is on the box that carries the text, and a hidden box has no text, so a
+ * screen reader is told exactly when there is something to be told.
+ */
 const Say = component<{ readonly ready: boolean; readonly problem: string }>((props) => () => (
   <>
-    {props.problem === '' ? (
-      <Status>{props.ready ? 'running' : 'starting…'}</Status>
-    ) : (
-      <Problem role="alert">{props.problem}</Problem>
-    )}
-    {props.ready ? '' : <Empty>the preview is warming up</Empty>}
+    <Status $show={props.problem === ''}>{props.ready ? 'running' : 'starting…'}</Status>
+    <Problem $show={props.problem !== ''} role="alert">
+      {props.problem}
+    </Problem>
+    <Empty $show={!props.ready}>the preview is warming up</Empty>
   </>
 ));

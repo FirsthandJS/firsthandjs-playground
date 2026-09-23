@@ -50,8 +50,11 @@ export async function compile(source: string, filename: string): Promise<Compile
       // this, `</h1>` is parsed as a regular expression and every sketch is a
       // syntax error.
       plugins: ['syntax-jsx', ['firsthand', { packageName: 'playground' }]],
+      // For the debugger, not for the preview: see `annotate`.
+      sourceMaps: true,
+      sourceFileName: filename,
     });
-    return { code: result?.code ?? '' };
+    return { code: annotate(result?.code ?? '', result?.map, source, filename) };
   } catch (error) {
     return { error: message(error) };
   }
@@ -66,4 +69,44 @@ export async function compile(source: string, filename: string): Promise<Compile
 function message(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   return text.replace(/^[^:]*:\s*/, '').split('\n')[0] ?? text;
+}
+
+/**
+ * What the browser's debugger needs to see a sketch as the sketch.
+ *
+ * The preview imports each compiled module from a blob URL, because a blob is
+ * the only way to `import` a string. That is invisible until someone opens
+ * devtools, and then it is two problems. Every recompile mints a new URL, so
+ * the Sources tree fills with `blob:http://…/<uuid>` entries and a breakpoint
+ * is set on a script that the next keystroke replaces. And what is there to
+ * read is the compiler's output — templates, parts and hoisted markup — rather
+ * than the TSX that was typed.
+ *
+ * Two comments fix both. `sourceURL` gives every compile of one file the same
+ * name and the same path, so the debugger keeps one entry and puts breakpoints
+ * back where they were. `sourceMappingURL` carries the map, with the original
+ * source inside it, so what is shown and what is stepped through is the file
+ * in the editor.
+ *
+ * The map is a percent-encoded data URL rather than a base64 one: `btoa`
+ * throws on anything outside Latin-1, and the default sketch alone has an em
+ * dash, an ellipsis and a degree sign in it.
+ */
+function annotate(
+  code: string,
+  map: object | null | undefined,
+  source: string,
+  filename: string,
+): string {
+  const lines = [code];
+  if (map !== null && map !== undefined) {
+    // `sourcesContent` is what lets the debugger show the TSX rather than ask
+    // the network for a file that was never served.
+    const whole = JSON.stringify({ ...map, sourcesContent: [source] });
+    lines.push(
+      `//# sourceMappingURL=data:application/json;charset=utf-8,${encodeURIComponent(whole)}`,
+    );
+  }
+  lines.push(`//# sourceURL=firsthand:///${filename}`);
+  return lines.join('\n');
 }

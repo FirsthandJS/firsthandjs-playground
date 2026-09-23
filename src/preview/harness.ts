@@ -36,16 +36,62 @@ const BOOTSTRAP = `
       const root = document.getElementById('root');
       let stop = null;
       let current = null;
+      /** Which run is in progress, so a late report cannot land on a later one. */
+      let run = 0;
+      /** Whether this run has already said something went wrong. */
+      let broke = false;
+
+      /** A newline, spelled without an escape: this whole script is inside a template literal. */
+      const NL = String.fromCharCode(10);
+
+      /**
+       * What to put on the strip for one thrown thing.
+       *
+       * The message alone answers "what" and never "where", and in a playground
+       * where is most of the question: the sketch is thirty lines and the line
+       * number is the answer. A V8 stack already begins with the name and the
+       * message, so where there is one it is used whole, cut to the frames that
+       * belong to the sketch rather than to the framework underneath it.
+       */
+      const describe = (error) => {
+        if (!(error instanceof Error)) {
+          return String(error);
+        }
+        const stack = typeof error.stack === 'string' ? error.stack : '';
+        const whole = stack.includes(error.message)
+          ? stack
+          : error.name + ': ' + error.message;
+        return whole.split(NL).slice(0, 6).join(NL);
+      };
 
       const fail = (error) => {
-        parent.postMessage(
-          { kind: 'firsthand:error', message: String(error && error.message ? error.message : error) },
-          '*',
-        );
+        broke = true;
+        parent.postMessage({ kind: 'firsthand:error', message: describe(error), run }, '*');
       };
 
       addEventListener('error', (event) => { fail(event.error ?? event.message); });
       addEventListener('unhandledrejection', (event) => { fail(event.reason); });
+
+      /**
+       * An error the sketch reports itself.
+       *
+       * A \`catch\` that logs is the ordinary way code says something went wrong,
+       * and in an iframe the console it reaches is one nobody has open. It still
+       * reaches the real console — this adds the strip, it does not replace it.
+       */
+      const logged = console.error.bind(console);
+      console.error = (...parts) => {
+        logged(...parts);
+        broke = true;
+        parent.postMessage(
+          {
+            kind: 'firsthand:error',
+            message: parts.map((part) => (part instanceof Error ? describe(part) : String(part))).join(' '),
+            run,
+          },
+          '*',
+        );
+      };
 
       addEventListener('message', async (event) => {
         const data = event.data;
@@ -63,6 +109,8 @@ const BOOTSTRAP = `
         if (data.kind !== 'firsthand:run') {
           return;
         }
+        run += 1;
+        broke = false;
         if (stop !== null) {
           stop();
           stop = null;
@@ -80,7 +128,12 @@ const BOOTSTRAP = `
             // is what \`<App />\` compiles to, so this is that, by hand.
             stop = render(() => createComponent(view, {}), root);
           }
-          parent.postMessage({ kind: 'firsthand:ran' }, '*');
+          // Only when nothing has been reported for this run. A \`console.error\`
+          // during the first render is posted before this line is reached, and
+          // an unconditional "it ran" would clear it half a frame later.
+          if (!broke) {
+            parent.postMessage({ kind: 'firsthand:ran', run }, '*');
+          }
         } catch (error) {
           fail(error);
         }

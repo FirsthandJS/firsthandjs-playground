@@ -1,6 +1,22 @@
 import { styled } from '@firsthandjs/styled';
 import type { Mode } from '../state/theme';
 
+/**
+ * Shown or not, as a declaration rather than as a branch.
+ *
+ * The strip's three pieces are each either there or not, which reads as
+ * `{ready ? … : …}` and was written that way. A conditional whose branches are
+ * components is the one shape the framework does not yet take down properly —
+ * the branch that loses keeps its nodes — so the error box emptied instead of
+ * closing and "warming up" stayed over a running preview. Fixed in the
+ * compiler; not in the published version this page is built against.
+ *
+ * Nothing is lost by saying it in CSS. All three are absolutely positioned and
+ * cost nothing while hidden, and the strip stops remounting a pill on every
+ * keystroke.
+ */
+type Shown = { $show: boolean };
+
 export const Shell = styled.div`
   position: relative;
   min-height: 0;
@@ -15,7 +31,8 @@ export const Frame = styled.iframe<{ $mode: Mode }>`
   background: ${(props) => (props.$mode === 'dark' ? '#0b0f1a' : '#ffffff')};
 `;
 
-export const Status = styled.div`
+export const Status = styled.div<Shown>`
+  display: ${(props) => (props.$show ? 'block' : 'none')};
   position: absolute;
   right: 10px;
   bottom: 8px;
@@ -29,7 +46,8 @@ export const Status = styled.div`
   pointer-events: none;
 `;
 
-export const Problem = styled.div`
+export const Problem = styled.div<Shown>`
+  display: ${(props) => (props.$show ? 'block' : 'none')};
   position: absolute;
   left: 10px;
   right: 10px;
@@ -46,10 +64,10 @@ export const Problem = styled.div`
   white-space: pre-wrap;
 `;
 
-export const Empty = styled.div`
+export const Empty = styled.div<Shown>`
   position: absolute;
   inset: 0;
-  display: grid;
+  display: ${(props) => (props.$show ? 'grid' : 'none')};
   place-items: center;
   color: ${(props) => props.theme.dim};
   font-size: 12.5px;
