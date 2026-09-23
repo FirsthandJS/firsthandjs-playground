@@ -10,82 +10,59 @@ import { component, provide, signal } from '@firsthandjs/dom';
 import { ThemeContext } from '@firsthandjs/styled';
 import { Editor } from './editor/editor';
 import { Preview } from './preview/preview';
+import { Chrome } from './ui/chrome';
 import { Tabs } from './ui/tabs';
-import { createFiles } from './state/files';
-import { PALETTE, mode, toggle } from './state/theme';
+import { createFiles, type Files } from './state/files';
+import { PALETTE, mode } from './state/theme';
 import { AVAILABLE } from './preview/runtime-map';
 import { Frame, GlobalStyle, Pane, PaneHead, PaneTitle, Panes, Spacer } from './ui/theme.styled';
-import { Actions, Dot, Link, Mark, Sub, Switch, Top } from './ui/chrome.styled';
+
+/** The left pane: the tab bar, and the file it has open. */
+const Source = component<{ readonly files: Files }>((props) => (
+  <Pane>
+    <PaneHead>
+      <Tabs files={props.files} />
+    </PaneHead>
+    <Editor
+      file={props.files.open()}
+      onEdit={(source: string) => {
+        props.files.edit(props.files.openId.value, source);
+      }}
+    />
+  </Pane>
+));
+
+/** The right pane: the page that file makes, and what is available to it. */
+const Running = component<{ readonly files: Files }>((props) => (
+  <Pane>
+    <PaneHead>
+      <PaneTitle>preview</PaneTitle>
+      <Spacer />
+      <PaneTitle title={AVAILABLE.join('  ')}>{String(AVAILABLE.length)} packages ready</PaneTitle>
+    </PaneHead>
+    <Preview source={props.files.open().source} name={props.files.open().name} />
+  </Pane>
+));
 
 export const App = component(() => {
   const theme = signal(PALETTE[mode.value]);
   provide(ThemeContext, theme);
-
-  // One place where the mode becomes the palette everything else reads.
-  const follow = (): void => {
-    theme.value = PALETTE[mode.value];
-  };
 
   const files = createFiles();
 
   return () => (
     <Frame>
       <GlobalStyle />
-      <Top>
-        <Mark>
-          <Dot />
-          Firsthand
-          <Sub>playground</Sub>
-        </Mark>
-        <Spacer />
-        <Actions>
-          <Link href="https://github.com/FirsthandJS/firsthand" target="_blank" rel="noreferrer">
-            the framework
-          </Link>
-          <Link
-            href="https://github.com/FirsthandJS/firsthandjs-playground"
-            target="_blank"
-            rel="noreferrer"
-          >
-            source
-          </Link>
-          <Switch
-            type="button"
-            title={mode.value === 'dark' ? 'switch to light' : 'switch to dark'}
-            aria-label="toggle colour scheme"
-            onClick={() => {
-              toggle();
-              follow();
-            }}
-          >
-            {mode.value === 'dark' ? '☾' : '☀'}
-          </Switch>
-        </Actions>
-      </Top>
-
+      <Chrome
+        onToggle={() => {
+          // The one place where the mode becomes the palette everything else
+          // reads. The signal is what the styled components are subscribed to.
+          theme.value = PALETTE[mode.value];
+        }}
+      />
       <Panes>
-        <Pane>
-          <PaneHead>
-            <Tabs files={files} />
-          </PaneHead>
-          <Editor
-            file={files.open()}
-            onEdit={(source: string) => {
-              files.edit(files.openId.value, source);
-            }}
-          />
-        </Pane>
-
-        <Pane>
-          <PaneHead>
-            <PaneTitle>preview</PaneTitle>
-            <Spacer />
-            <PaneTitle title={AVAILABLE.join('  ')}>
-              {String(AVAILABLE.length)} packages ready
-            </PaneTitle>
-          </PaneHead>
-          <Preview source={files.open().source} name={files.open().name} />
-        </Pane>
+        <Source files={files} />
+        <Running files={files} />
       </Panes>
     </Frame>
   );

@@ -67,14 +67,34 @@ export type Files = {
   select: (id: string) => void;
 };
 
-export function createFiles(): Files {
-  const stored = read<File[]>(KEY, [FIRST]);
-  const all = signal<readonly File[]>(stored.length === 0 ? [FIRST] : stored);
-  const openId = signal(read<string>(OPEN, all.value[0]?.id ?? FIRST.id));
+/** A file made now: an id nothing else has, and a name nothing else has. */
+function fresh(taken: readonly string[], name: string): File {
+  return {
+    id: `f${String(Date.now())}${String(Math.floor(Math.random() * 1000))}`,
+    name: free(taken, name),
+    source: STARTER,
+  };
+}
 
-  if (!all.value.some((file) => file.id === openId.value)) {
-    openId.value = all.value[0]?.id ?? FIRST.id;
-  }
+/**
+ * What was stored, made sound.
+ *
+ * Storage can hold anything a previous version wrote, or nothing, or an open
+ * file that has since been deleted — and every one of those has to end with a
+ * playground that has files and one of them open.
+ */
+function restore(): { files: readonly File[]; open: string } {
+  const stored = read<File[]>(KEY, [FIRST]);
+  const files = stored.length === 0 ? [FIRST] : stored;
+  const first = files[0] ?? FIRST;
+  const open = read<string>(OPEN, first.id);
+  return { files, open: files.some((file) => file.id === open) ? open : first.id };
+}
+
+export function createFiles(): Files {
+  const initial = restore();
+  const all = signal<readonly File[]>(initial.files);
+  const openId = signal(initial.open);
 
   const put = (next: readonly File[]): void => {
     all.value = next;
@@ -92,21 +112,19 @@ export function createFiles(): Files {
     open: () => all.value.find((file) => file.id === openId.value) ?? (all.value[0] as File),
     select,
     add: (name = 'sketch.tsx') => {
-      const file: File = {
-        id: `f${String(Date.now())}${String(Math.floor(Math.random() * 1000))}`,
-        name: free(
-          all.value.map((other) => other.name),
-          name,
-        ),
-        source: STARTER,
-      };
+      const file = fresh(
+        all.value.map((other) => other.name),
+        name,
+      );
       put([...all.value, file]);
       select(file.id);
     },
     rename: (id, name) => {
       const taken = all.value.filter((file) => file.id !== id).map((file) => file.name);
       const wanted = name.trim() === '' ? 'untitled.tsx' : name.trim();
-      put(all.value.map((file) => (file.id === id ? { ...file, name: free(taken, wanted) } : file)));
+      put(
+        all.value.map((file) => (file.id === id ? { ...file, name: free(taken, wanted) } : file)),
+      );
     },
     remove: (id) => {
       const left = all.value.filter((file) => file.id !== id);

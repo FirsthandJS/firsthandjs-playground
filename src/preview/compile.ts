@@ -11,6 +11,7 @@
  * exactly the order this needs, and is why the types are still present while
  * the markup is compiled.
  */
+import type * as BabelStandalone from '@babel/standalone';
 import firsthand from '@firsthandjs/compiler/plugin';
 
 export type Compiled = { readonly code: string } | { readonly error: string };
@@ -22,9 +23,9 @@ export type Compiled = { readonly code: string } | { readonly error: string };
  * source to compile, so it is not in the way of the editor appearing. One
  * promise, kept: the plugin may only be registered once.
  */
-let babel: Promise<typeof import('@babel/standalone')> | null = null;
+let babel: Promise<typeof BabelStandalone> | null = null;
 
-function load(): Promise<typeof import('@babel/standalone')> {
+function load(): Promise<typeof BabelStandalone> {
   babel ??= import('@babel/standalone').then((module) => {
     // The cast is a types-only gap. Babel hands a plugin its API and its
     // options; `@babel/standalone` types `registerPlugin` as taking a plugin

@@ -41,7 +41,8 @@ export const Frame = styled.div`
 export const Panes = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1px;
+  /* Enough that the two panes read as two things, and no more. */
+  gap: 0.85rem;
   min-height: 0;
   padding: 0 1rem 1rem;
 

@@ -34,7 +34,9 @@ describe('the declarations the editor loads', () => {
   });
 
   it('carries each package’s manifest, which is what resolution reads', () => {
-    const manifests = Object.keys(declarations as Record<string, string>).filter((path) => path.endsWith('package.json'));
+    const manifests = Object.keys(declarations as Record<string, string>).filter((path) =>
+      path.endsWith('package.json'),
+    );
 
     expect(manifests).toContain('file:///node_modules/@firsthandjs/dom/package.json');
     expect(manifests).toContain('file:///node_modules/@firsthandjs/jsx-runtime/package.json');

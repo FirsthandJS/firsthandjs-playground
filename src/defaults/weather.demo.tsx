@@ -1,16 +1,44 @@
-import { component, signal } from '@firsthandjs/dom';
+import { component, provide } from '@firsthandjs/dom';
+import {
+  createData,
+  createFetchClient,
+  DataContext,
+  tag,
+  useInvalidate,
+  useResource,
+} from '@firsthandjs/data';
 import { createGlobalStyle, styled } from '@firsthandjs/styled';
 
 /**
  * London, live from open-meteo.com. No key, no build step, no install.
  *
- * The setup below runs ONCE. Everything that updates afterwards is an
- * expression in the markup that read a signal — nothing else re-runs.
+ * Three things worth watching.
  *
- * The styling is `@firsthandjs/styled`: real CSS, scoped to the component it
- * belongs to, with props reaching into it. `Card` takes `$stale` and fades
- * while the next answer is on its way.
+ * **The setup runs once.** Everything that updates afterwards is an expression
+ * in the markup that read a signal — nothing else re-runs.
+ *
+ * **The data is a resource.** `useResource` owns the request: it tracks
+ * loading, keeps the previous answer on screen while the next one is fetched,
+ * aborts what nobody is waiting for any more, and is reloaded by name —
+ * `invalidate(tag('weather'))` — rather than by calling something again.
+ *
+ * **The styling is CSS.** `@firsthandjs/styled` scopes it to the component it
+ * belongs to, and props reach into it: `Card` takes `$stale` and fades while
+ * the next answer is on its way.
  */
+
+/** Configured once. A base URL, and answers cached for half a minute. */
+const api = createFetchClient({
+  baseUrl: 'https://api.open-meteo.com/v1/',
+  cache: { ttl: 30_000 },
+});
+
+const FORECAST =
+  'forecast?latitude=51.5072&longitude=-0.1276&current=temperature_2m,wind_speed_10m,weather_code';
+
+type Forecast = {
+  current: { temperature_2m: number; wind_speed_10m: number; weather_code: number };
+};
 
 const SKY: Record<number, string> = {
   0: 'Clear',
@@ -35,9 +63,25 @@ const SKY: Record<number, string> = {
 };
 
 const LOOK: Record<number, string> = {
-  0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️',
-  51: '🌦️', 53: '🌦️', 55: '🌧️', 61: '🌧️', 63: '🌧️', 65: '🌧️',
-  71: '🌨️', 73: '🌨️', 75: '❄️', 80: '🌦️', 81: '🌦️', 82: '⛈️', 95: '⛈️',
+  0: '☀️',
+  1: '🌤️',
+  2: '⛅',
+  3: '☁️',
+  45: '🌫️',
+  48: '🌫️',
+  51: '🌦️',
+  53: '🌦️',
+  55: '🌧️',
+  61: '🌧️',
+  63: '🌧️',
+  65: '🌧️',
+  71: '🌨️',
+  73: '🌨️',
+  75: '❄️',
+  80: '🌦️',
+  81: '🌦️',
+  82: '⛈️',
+  95: '⛈️',
 };
 
 /**
@@ -139,65 +183,62 @@ const Refresh = styled.button`
   }
 `;
 
-type Weather = { temperature: number; wind: number; code: number };
+const Weather = component(() => {
+  const forecast = useResource(({ request, tags }) => {
+    // What this resource is about. Anything that invalidates `weather`
+    // reloads it, without knowing that this component exists.
+    tags(tag('weather', { city: 'london' }));
+    return api.get<Forecast>(FORECAST)(request);
+  });
 
-export default component(() => {
-  const weather = signal<Weather | null>(null);
-  const loading = signal(true);
-  const failed = signal(false);
-  const at = signal('');
-
-  const load = async (): Promise<void> => {
-    loading.value = true;
-    failed.value = false;
-    try {
-      const response = await fetch(
-        'https://api.open-meteo.com/v1/forecast' +
-          '?latitude=51.5072&longitude=-0.1276&current=temperature_2m,wind_speed_10m,weather_code',
-      );
-      const body = await response.json();
-      weather.value = {
-        temperature: Math.round(body.current.temperature_2m),
-        wind: Math.round(body.current.wind_speed_10m),
-        code: body.current.weather_code,
-      };
-      at.value = new Date().toLocaleTimeString();
-    } catch {
-      failed.value = true;
-    } finally {
-      loading.value = false;
-    }
+  const invalidate = useInvalidate();
+  const reload = (): void => {
+    // By name, not by reference: this reaches every resource tagged
+    // `weather`, and through the client's cache, which would otherwise answer
+    // a reload with the answer being reloaded.
+    void invalidate(tag('weather'));
   };
 
-  void load();
+  return () => {
+    const now = forecast.data.value?.current;
 
-  // Every {...} below is a reactive scope of its own: when `weather` is
-  // written, only the expressions that read it are touched.
-  return (
-    <Main>
-      <Palette />
-      <Title>London</Title>
+    return (
+      <Main>
+        <Palette />
+        <Title>London</Title>
 
-      {failed.value ? (
-        <Muted>Could not reach the weather service.</Muted>
-      ) : weather.value === null ? (
-        <Muted>Looking outside…</Muted>
-      ) : (
-        <Card $stale={loading.value}>
-          <Look>{LOOK[weather.value.code] ?? '🌍'}</Look>
-          <div>
-            <Temp>{String(weather.value.temperature)}°C</Temp>
-            <Sky>{SKY[weather.value.code] ?? 'Weather'}</Sky>
-            <Muted>{String(weather.value.wind)} km/h wind</Muted>
-          </div>
-        </Card>
-      )}
+        {forecast.status.value === 'error' ? (
+          <Muted>Could not reach the weather service.</Muted>
+        ) : now === undefined ? (
+          <Muted>Looking outside…</Muted>
+        ) : (
+          // `loading` is true while the next answer is on its way, with the
+          // previous one still on screen — which `status` alone cannot say.
+          <Card $stale={forecast.loading.value}>
+            <Look>{LOOK[now.weather_code] ?? '🌍'}</Look>
+            <div>
+              <Temp>{String(Math.round(now.temperature_2m))}°C</Temp>
+              <Sky>{SKY[now.weather_code] ?? 'Weather'}</Sky>
+              <Muted>{String(Math.round(now.wind_speed_10m))} km/h wind</Muted>
+            </div>
+          </Card>
+        )}
 
-      <Refresh type="button" disabled={loading.value} onClick={() => void load()}>
-        {loading.value ? 'Looking…' : 'Refresh'}
-      </Refresh>
+        <Refresh type="button" disabled={forecast.loading.value} onClick={reload}>
+          {forecast.loading.value ? 'Looking…' : 'Refresh'}
+        </Refresh>
+      </Main>
+    );
+  };
+});
 
-      {at.value === '' ? '' : <Muted>Updated at {at.value}</Muted>}
-    </Main>
-  );
+/**
+ * The store lives above whatever uses it.
+ *
+ * It holds the resources and matches invalidations against their tags. An
+ * application provides it once, at the root; here that root is this file.
+ */
+export default component(() => {
+  provide(DataContext, createData());
+  return <Weather />;
 });

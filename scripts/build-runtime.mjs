@@ -37,13 +37,17 @@ export const RUNTIME = [
 ];
 
 /** `@firsthandjs/dom/internal` becomes `dom-internal`, which is a file name. */
-export const fileFor = (specifier) => `${specifier.replace('@firsthandjs/', '').replace('/', '-')}.js`;
+export const fileFor = (specifier) =>
+  `${specifier.replace('@firsthandjs/', '').replace('/', '-')}.js`;
 
 rmSync(out, { recursive: true, force: true });
 
 await build({
   entryPoints: Object.fromEntries(
-    RUNTIME.map((specifier) => [fileFor(specifier).replace(/\.js$/, ''), require.resolve(specifier)]),
+    RUNTIME.map((specifier) => [
+      fileFor(specifier).replace(/\.js$/, ''),
+      require.resolve(specifier),
+    ]),
   ),
   outdir: out,
   bundle: true,

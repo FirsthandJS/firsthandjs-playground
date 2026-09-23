@@ -23,21 +23,14 @@ import { RUNTIME_MAP } from './runtime-map';
 /** The mount convention, and the one thing a visitor has to know. */
 export const CONVENTION = 'export default a component, or call render() yourself';
 
-export function harness(): string {
-  const imports = JSON.stringify({ imports: RUNTIME_MAP }, null, 2);
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <script type="importmap">${imports}</script>
-    <style>
-      html, body { margin: 0; min-height: 100%; }
-      body { font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module">
+/**
+ * The module that runs inside the preview.
+ *
+ * Kept out of the document below so that each is one thing: this is the
+ * protocol — a theme message, a run message, and what it answers with — and
+ * `harness` is the page it is served in.
+ */
+const BOOTSTRAP = `
       import { render, createComponent } from '@firsthandjs/dom';
 
       const root = document.getElementById('root');
@@ -94,7 +87,23 @@ export function harness(): string {
       });
 
       parent.postMessage({ kind: 'firsthand:ready' }, '*');
-    </script>
+`;
+
+export function harness(): string {
+  const imports = JSON.stringify({ imports: RUNTIME_MAP }, null, 2);
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script type="importmap">${imports}</script>
+    <style>
+      html, body { margin: 0; min-height: 100%; }
+      body { font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">${BOOTSTRAP}</script>
   </body>
 </html>`;
 }

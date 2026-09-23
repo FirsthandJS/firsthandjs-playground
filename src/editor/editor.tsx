@@ -3,10 +3,11 @@
  *
  * A model per file rather than an editor per file, which is how Monaco is
  * meant to be used: switching tabs swaps the model, and each file keeps its
- * own undo history, cursor and scroll position because the model is where
+ * own undo history, cursor and scroll position, because the model is where
  * those live.
  */
 import { component, effect, onCleanup } from '@firsthandjs/dom';
+import type { editor as MonacoEditor } from 'monaco-editor/esm/vs/editor/editor.api.js';
 import { setupMonaco } from './monaco';
 import { mode } from '../state/theme';
 import { Host } from '../ui/editor.styled';
@@ -17,51 +18,82 @@ export type EditorProps = {
   readonly onEdit: (source: string) => void;
 };
 
+/**
+ * How the editor looks and behaves, separately from what it is showing.
+ *
+ * A table rather than a wall of arguments inside the mount: none of it is a
+ * decision the component makes, and all of it is a decision somebody might
+ * want to change.
+ */
+const OPTIONS = {
+  automaticLayout: true,
+  fontSize: 13.5,
+  fontLigatures: true,
+  fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace',
+  minimap: { enabled: false },
+  padding: { top: 18, bottom: 18 },
+  scrollBeyondLastLine: false,
+  smoothScrolling: true,
+  renderLineHighlight: 'all',
+  cursorBlinking: 'smooth',
+  cursorSmoothCaretAnimation: 'on',
+  roundedSelection: true,
+  tabSize: 2,
+  bracketPairColorization: { enabled: true },
+  guides: { indentation: true },
+  scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+} as const satisfies MonacoEditor.IStandaloneEditorConstructionOptions;
+
+/**
+ * A model per file, made once and kept.
+ *
+ * The model is where the undo history, the cursor and the scroll position
+ * live, so keeping it is what makes switching tabs feel like switching files
+ * rather than like reloading one.
+ */
+function library(
+  monaco: ReturnType<typeof setupMonaco>,
+  onEdit: (source: string) => void,
+): { of: (file: File) => MonacoEditor.ITextModel; dispose: () => void } {
+  const models = new Map<string, MonacoEditor.ITextModel>();
+  return {
+    of: (file) => {
+      const existing = models.get(file.id);
+      if (existing !== undefined && !existing.isDisposed()) {
+        return existing;
+      }
+      const model = monaco.editor.createModel(
+        file.source,
+        'typescript',
+        monaco.Uri.parse(`file:///${file.id}.tsx`),
+      );
+      model.onDidChangeContent(() => {
+        onEdit(model.getValue());
+      });
+      models.set(file.id, model);
+      return model;
+    },
+    dispose: () => {
+      for (const model of models.values()) {
+        model.dispose();
+      }
+    },
+  };
+}
+
 export const Editor = component<EditorProps>((props) => {
   const monaco = setupMonaco();
-  let editor: import('monaco-editor').editor.IStandaloneCodeEditor | null = null;
-  const models = new Map<string, import('monaco-editor').editor.ITextModel>();
-
-  const modelFor = (file: File): import('monaco-editor').editor.ITextModel => {
-    const existing = models.get(file.id);
-    if (existing !== undefined && !existing.isDisposed()) {
-      return existing;
-    }
-    const model = monaco.editor.createModel(
-      file.source,
-      'typescript',
-      monaco.Uri.parse(`file:///${file.id}.tsx`),
-    );
-    model.onDidChangeContent(() => {
-      props.onEdit(model.getValue());
-    });
-    models.set(file.id, model);
-    return model;
-  };
+  let editor: MonacoEditor.IStandaloneCodeEditor | null = null;
+  const models = library(monaco, (source: string) => {
+    props.onEdit(source);
+  });
+  const modelFor = models.of;
 
   const mount = (element: HTMLDivElement): void => {
-    // A handle for the end-to-end tests, which ask the language service for
-    // completions the way a keystroke does.
-    (globalThis as unknown as { __monaco?: unknown }).__monaco = monaco;
     editor = monaco.editor.create(element, {
+      ...OPTIONS,
       model: modelFor(props.file),
       theme: `firsthand-${mode.value}`,
-      automaticLayout: true,
-      fontSize: 13.5,
-      fontLigatures: true,
-      fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace',
-      minimap: { enabled: false },
-      padding: { top: 18, bottom: 18 },
-      scrollBeyondLastLine: false,
-      smoothScrolling: true,
-      renderLineHighlight: 'all',
-      cursorBlinking: 'smooth',
-      cursorSmoothCaretAnimation: 'on',
-      roundedSelection: true,
-      tabSize: 2,
-      bracketPairColorization: { enabled: true },
-      guides: { indentation: true },
-      scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
     });
   };
 
@@ -87,9 +119,7 @@ export const Editor = component<EditorProps>((props) => {
 
   onCleanup(() => {
     editor?.dispose();
-    for (const model of models.values()) {
-      model.dispose();
-    }
+    models.dispose();
   });
 
   return <Host ref={mount} />;
