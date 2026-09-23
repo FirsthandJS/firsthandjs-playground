@@ -4,3 +4,7 @@ public/runtime
 src/generated
 .DS_Store
 *.local
+
+# Playwright
+test-results/
+playwright-report/

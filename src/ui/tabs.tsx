@@ -21,9 +21,18 @@ type RenameProps = {
   readonly onAbandon: () => void;
 };
 
-/** A tab that is being renamed. Enter and blur keep it; Escape does not. */
+/**
+ * A tab that is being renamed. Enter and blur keep it; Escape does not.
+ *
+ * `decided` is why Escape works at all. Abandoning takes this input out of the
+ * document, and removing a focused element fires `blur` on the way out — so
+ * the blur handler ran after the Escape handler and kept the very name the
+ * visitor had just rejected. Escape was documented behaviour that had never
+ * once happened.
+ */
 const Rename = component<RenameProps>((props) => {
   const typed = (event: Event): string => (event.target as HTMLInputElement).value;
+  let decided = false;
 
   return (
     <Naming
@@ -31,12 +40,16 @@ const Rename = component<RenameProps>((props) => {
       autofocus
       aria-label={`rename ${props.file.name}`}
       onBlur={(event: FocusEvent) => {
-        props.onKeep(typed(event));
+        if (!decided) {
+          props.onKeep(typed(event));
+        }
       }}
       onKeyDown={(event: KeyboardEvent) => {
         if (event.key === 'Enter') {
+          decided = true;
           props.onKeep(typed(event));
         } else if (event.key === 'Escape') {
+          decided = true;
           props.onAbandon();
         }
       }}
@@ -78,7 +91,11 @@ const FileTab = component<FileTabProps>((props) => (
     <TabName>{props.file.name}</TabName>
     <Close
       role="button"
-      tabindex={0}
+      // `tabIndex`, not `tabindex`: a styled component forwards a prop when
+      // the element has a property of that name, and the property is spelled
+      // in camel case. The lowercase attribute is dropped in silence, which
+      // made this control mouse-only while looking keyboard-operable.
+      tabIndex={0}
       aria-label={`delete ${props.file.name}`}
       title="delete"
       onClick={(event: MouseEvent) => {
