@@ -77,10 +77,25 @@ export function setupMonaco(): typeof monaco {
   return monaco;
 }
 
+/**
+ * Selection, in hex.
+ *
+ * Monaco parses a theme colour with its own hex parser and nothing else — an
+ * `rgba(…)` string is dropped, and the editor quietly keeps the selection its
+ * base theme came with, which is a solid blue that swallows the text under it.
+ * So these are `#rrggbbaa`: the page's accent at an alpha low enough that the
+ * ink on top of it is still the ink, in both modes.
+ */
+const SELECTION = {
+  dark: { active: '#64f0d024', inactive: '#64f0d014', related: '#64f0d01a' },
+  light: { active: '#0f9e841f', inactive: '#0f9e8412', related: '#0f9e8417' },
+} as const;
+
 /** Two themes of our own, so the editor belongs to the page around it. */
 function defineThemes(): void {
   const build = (name: Mode) => {
     const palette = PALETTE[name];
+    const selection = SELECTION[name];
     monaco.editor.defineTheme(`firsthand-${name}`, {
       base: name === 'dark' ? 'vs-dark' : 'vs',
       inherit: true,
@@ -94,7 +109,11 @@ function defineThemes(): void {
         'editor.foreground': palette.ink,
         'editorLineNumber.foreground': palette.dim,
         'editorCursor.foreground': palette.accent,
-        'editor.selectionBackground': palette.accentSoft,
+        'editor.selectionBackground': selection.active,
+        'editor.inactiveSelectionBackground': selection.inactive,
+        'editor.selectionHighlightBackground': selection.related,
+        'editor.wordHighlightBackground': selection.related,
+        'editor.wordHighlightStrongBackground': selection.related,
         'editor.lineHighlightBackground': name === 'dark' ? '#121a2c' : '#eef3fb',
         'editorIndentGuide.background1': palette.panelEdge,
       },
