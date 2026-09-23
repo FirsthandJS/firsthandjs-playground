@@ -12,6 +12,7 @@
     "build": "vite build",
     "generate": "node scripts/build-runtime.mjs && node scripts/collect-types.mjs",
     "preview": "vite preview",
+    "precheck": "npm run generate",
     "check": "tsc --noEmit",
     "pretest": "npm run generate",
     "test": "vitest run"
