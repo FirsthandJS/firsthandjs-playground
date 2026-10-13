@@ -11,7 +11,9 @@
  */
 const NAMES = {
   '@firsthandjs/core': 'core.js',
-  '@firsthandjs/dom': 'dom.js',
+  // The shim, not the package: see `src/preview/runtime/dom-preview.js`. A
+  // sketch's own `render()` has to land somewhere the harness can clear.
+  '@firsthandjs/dom': 'dom-preview.js',
   '@firsthandjs/dom/internal': 'dom-internal.js',
   '@firsthandjs/data': 'data.js',
   '@firsthandjs/styled': 'styled.js',

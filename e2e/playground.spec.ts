@@ -179,6 +179,50 @@ export default component(() => <p>A playground marker</p>);`,
   await expect(frame.getByText('A playground marker')).toBeVisible();
 });
 
+/**
+ * One sketch on screen, not a pile of them.
+ *
+ * The convention is "export a component, **or call `render()` yourself**", and
+ * the second half leaked. A sketch's own `render()` mounts into
+ * `document.body` — outside the node the harness clears between runs — and its
+ * disposer belonged to nobody, so every edit left the previous version where it
+ * was and put the new one underneath. Three edits, three copies, and no way to
+ * be rid of them but a reload. That is the report this pins.
+ *
+ * Driven at the harness rather than through the editor, because what matters is
+ * the sequence of runs, and typing only reaches it a beat at a time.
+ */
+test('replaces a sketch that renders itself, rather than stacking copies', async ({ page }) => {
+  const frame = await preview(page);
+
+  const sketch = (mark: string) =>
+    `import { component, render } from '@firsthandjs/dom';
+     const App = component(() => {
+       const p = document.createElement('p');
+       p.setAttribute('data-mark', '${mark}');
+       p.textContent = '${mark}';
+       return p;
+     });
+     render(() => App({}));`;
+
+  for (const mark of ['one', 'two', 'three']) {
+    await page.evaluate(
+      ([code]) => {
+        const win =
+          document.querySelector<HTMLIFrameElement>('iframe[title="preview"]')?.contentWindow;
+        win?.postMessage({ kind: 'firsthand:run', code }, '*');
+      },
+      [sketch(mark)],
+    );
+    await page.waitForTimeout(600);
+  }
+
+  await expect(frame.locator('[data-mark="three"]')).toHaveCount(1);
+  await expect(frame.locator('p')).toHaveCount(1);
+  await expect(frame.locator('[data-mark="one"]')).toHaveCount(0);
+  await expect(frame.locator('[data-mark="two"]')).toHaveCount(0);
+});
+
 test('a compile error is reported rather than swallowed', async ({ page }) => {
   await preview(page);
 

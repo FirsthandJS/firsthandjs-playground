@@ -43,12 +43,20 @@ export const fileFor = (specifier) =>
 rmSync(out, { recursive: true, force: true });
 
 await build({
-  entryPoints: Object.fromEntries(
-    RUNTIME.map((specifier) => [
-      fileFor(specifier).replace(/\.js$/, ''),
-      require.resolve(specifier),
-    ]),
-  ),
+  entryPoints: {
+    ...Object.fromEntries(
+      RUNTIME.map((specifier) => [
+        fileFor(specifier).replace(/\.js$/, ''),
+        require.resolve(specifier),
+      ]),
+    ),
+    // What `@firsthandjs/dom` resolves to for a sketch: the real package, with
+    // a `render` that mounts into the preview's root and leaves its disposer
+    // where the harness can reach it. An entry rather than a copy, so
+    // splitting keeps it in the same chunk as the package it re-exports and
+    // there is one owner tree.
+    'dom-preview': resolve(root, 'src/preview/runtime/dom-preview.js'),
+  },
   outdir: out,
   bundle: true,
   splitting: true,
@@ -61,4 +69,4 @@ await build({
   legalComments: 'none',
 });
 
-console.log(`runtime: ${String(RUNTIME.length)} entries in public/runtime`);
+console.log(`runtime: ${String(RUNTIME.length + 1)} entries in public/runtime`);

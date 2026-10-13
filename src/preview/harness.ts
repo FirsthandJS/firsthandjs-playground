@@ -35,7 +35,19 @@ const BOOTSTRAP = `
 
       const root = document.getElementById('root');
       let stop = null;
-      let current = null;
+      /**
+       * Disposers for what the current sketch mounted by calling \`render()\`
+       * itself, which the import map's \`@firsthandjs/dom\` records here.
+       */
+      let owned = [];
+      globalThis.__firsthandPreviewOwn = owned;
+
+      /** Releases a list of mounts, in reverse, and empties it. */
+      const release = (mounts) => {
+        for (const stopIt of mounts.splice(0).reverse()) {
+          stopIt();
+        }
+      };
       /** Which run is in progress, so a late report cannot land on a later one. */
       let run = 0;
       /** Whether this run has already said something went wrong. */
@@ -110,18 +122,45 @@ const BOOTSTRAP = `
           return;
         }
         run += 1;
+        const mine = run;
         broke = false;
+
+        /**
+         * The previous run goes now, before the import rather than after it.
+         *
+         * A sketch that renders itself does so while its module is being
+         * evaluated, which happens inside the \`await\` below — so there is no
+         * later moment at which clearing the root would not also clear what
+         * the new sketch has just mounted.
+         */
         if (stop !== null) {
           stop();
           stop = null;
         }
+        release(owned);
         root.replaceChildren();
-        if (current !== null) {
-          URL.revokeObjectURL(current);
-        }
-        current = URL.createObjectURL(new Blob([data.code], { type: 'text/javascript' }));
+
+        /**
+         * This run's own list, and its own URL.
+         *
+         * Per run, because runs overlap: the parent debounces typing but does
+         * not wait for a run to land, so while one sits in its import the next
+         * arrives. A shared list could not say which mount belonged to which,
+         * and a shared URL let the newer run revoke the blob the older one was
+         * still importing.
+         */
+        owned = [];
+        globalThis.__firsthandPreviewOwn = owned;
+        const mounts = owned;
+        const url = URL.createObjectURL(new Blob([data.code], { type: 'text/javascript' }));
         try {
-          const module = await import(current);
+          const module = await import(url);
+          if (mine !== run) {
+            // Superseded while importing. Anything this module mounted on the
+            // way in is taken back; the run that replaced it owns the rest.
+            release(mounts);
+            return;
+          }
           const view = module.default;
           if (typeof view === 'function') {
             // A component is a function the compiler marked; calling it as one
@@ -135,7 +174,12 @@ const BOOTSTRAP = `
             parent.postMessage({ kind: 'firsthand:ran', run }, '*');
           }
         } catch (error) {
-          fail(error);
+          if (mine === run) {
+            fail(error);
+          }
+        } finally {
+          // Its own, so no run can pull the module out from under another.
+          URL.revokeObjectURL(url);
         }
       });
 
