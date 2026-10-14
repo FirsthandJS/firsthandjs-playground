@@ -18,7 +18,12 @@
  */
 export * from '@firsthandjs/dom';
 
-import { render as mount } from '@firsthandjs/dom';
+import { render as mount, type Dispose, type View } from '@firsthandjs/dom';
+
+declare global {
+  /** Set by the harness, one array per run. See `bucket` below. */
+  var __firsthandPreviewOwn: Dispose[] | undefined;
+}
 
 /**
  * Where a sketch's own mounts are recorded.
@@ -29,23 +34,20 @@ import { render as mount } from '@firsthandjs/dom';
  * being evaluated — inside the harness's `import` — so the two really do
  * overlap, and a single shared list could not tell them apart.
  */
-function bucket() {
+function bucket(): Dispose[] | undefined {
   return globalThis.__firsthandPreviewOwn;
 }
 
 /** The preview's root, or the body if the page has somehow lost it. */
-function host() {
+function host(): ParentNode {
   return document.getElementById('root') ?? document.body;
 }
 
-export function render(view, container) {
+export function render(view: () => View, container?: ParentNode | null): Dispose {
   if (container !== undefined && container !== null) {
     return mount(view, container);
   }
   const stop = mount(view, host());
-  const own = bucket();
-  if (Array.isArray(own)) {
-    own.push(stop);
-  }
+  bucket()?.push(stop);
   return stop;
 }

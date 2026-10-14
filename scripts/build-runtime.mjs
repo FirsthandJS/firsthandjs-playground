@@ -55,7 +55,7 @@ await build({
     // where the harness can reach it. An entry rather than a copy, so
     // splitting keeps it in the same chunk as the package it re-exports and
     // there is one owner tree.
-    'dom-preview': resolve(root, 'src/preview/runtime/dom-preview.js'),
+    'dom-preview': resolve(root, 'src/preview/runtime/dom-preview.ts'),
   },
   outdir: out,
   bundle: true,
